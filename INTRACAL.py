@@ -408,6 +408,25 @@ class INTRACAL:
             self.log(f"[IGNORED] (Line {idx+1}) Skipped {cmd} on ignored qubit(s) {set(qubits) & self.ignored_qubits}.")
             return
 
+        # Command and Memory Keyword Correspondence Dictionary
+        command_to_remember_key = {
+            "QUANTIZE": "H",
+            "TRANSFORM": "H",
+            "QNOT": "NOT",
+            "QSWAP": "SWAP",
+            "QROTATE": "T",
+            "QUNROTATE": "TDG",
+            "QPHASE": "PHASE",
+            "QCONTROL": "CNOT",
+            "QCCONTROL": "CCNOT",
+        }
+
+        # Common "Forget" Check
+        remember_key = command_to_remember_key.get(cmd)
+        if remember_key and remember_key in self.remembered and self.rng.random() < 0.5:
+            self.log(f"[REMEMBERED] (Line {idx+1}) Oops, forgot to apply {remember_key}.")
+            return 
+
         # Mapping of mnemonics
         if cmd in ("QUANTIZE", "TRANSFORM"):       # H
             self._apply_quantum_gate(self.circuit.add_H_gate, qubits, "H")
@@ -431,11 +450,8 @@ class INTRACAL:
                         self.log(f"[WARN] (Line {idx+1}) T† gate not available; skipped on @{q}.")
                         return
                 self.command_history.append(f"Tdg@{q}")
-        elif cmd == "QPHASE":                       # Z (with remembered gimmick)
-            if "PHASE" in self.remembered and self.rng.random() < 0.5:
-                self.log(f"[REMEMBERED] (Line {idx+1}) Oops, forgot to apply PHASE.")
-            else:
-                self._apply_quantum_gate(self.circuit.add_Z_gate, qubits, "Z")
+        elif cmd == "QPHASE":                       # Z
+            self._apply_quantum_gate(self.circuit.add_Z_gate, qubits, "Z")
         elif cmd == "QCONTROL":                     # CNOT
             self._apply_quantum_gate2(self.circuit.add_CNOT_gate, qubits, "CNOT")
         elif cmd == "QCCONTROL":                    # Toffoli
@@ -551,11 +567,11 @@ class INTRACAL:
         m = re.match(r"REMEMBER (\w+)", line)
         if m and not re.match(r"\d+", m.group(1)):
             thing = m.group(1).upper()
-            self.remembered.add(thing)
-            if self.rng.random() < 0.5:
-                self.log(f"[REMEMBER] (Line {i+1}) Immediately forgot {thing}.")
-            else:
-                self.log(f"[REMEMBER] (Line {i+1}) {thing}? Never heard of it.")
+            if self.rng.random() < 0.5: # 50% chance of failure (forgetting)
+                self.log(f"[REMEMBER] (Line {i+1}) Failed to remember {thing}.")
+            else: # The remaining 50% chance of success (remembering)
+                self.remembered.add(thing)
+                self.log(f"[REMEMBER] (Line {i+1}) Okay, I will try to remember {thing}.")
             return True
 
         return False
